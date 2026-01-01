@@ -34,9 +34,9 @@ USGS_FLOW_STATIONS = {
         "short_name": "Evergreen",
     },
     "CLEIDACO": {
-        "usgs_site": "06717500",
-        "name": "Clear Creek at Idaho Springs",
-        "short_name": "Idaho Spr",
+        "usgs_site": "06716500",
+        "name": "Clear Creek near Lawson",
+        "short_name": "Lawson",
     },
     "PLABRUCO": {
         "usgs_site": "06701900",
@@ -132,6 +132,11 @@ RIVER_FLOW_RANGES = {
     # === OTHER SOUTH PLATTE ===
     "PLACHACO": {"min": 150, "max": 500, "ideal": 250, "type": "tailwater"},
     
+    # === NORTH SAINT VRAIN ===
+    # Tailwater below Button Rock (Ralph Price) Reservoir
+    # Small stream, typical flows 30-40 CFS
+    "NSVBRPCO": {"min": 20, "max": 80, "ideal": 35, "type": "tailwater"},
+    
     # === ARKANSAS RIVER ===
     # Note: Summer rafting flows (700+ CFS) end Aug 15
     # Best wade fishing: late Aug - Oct at 225-400 CFS
@@ -201,13 +206,16 @@ RIVER_STATIONS = {
     "BCROUTCO": {"name": "Bear Creek Reservoir Out", "short_name": "BCR Outlet"},
     
     # Clear Creek
-    "CLEIDACO": {"name": "Clear Crk - Idaho Springs", "short_name": "Idaho Spr"},
+    "CLEIDACO": {"name": "Clear Crk - Lawson", "short_name": "Lawson"},
     "CLEMPICO": {"name": "Clear Crk - Empire", "short_name": "Empire"},
     "CLEGOLCO": {"name": "Clear Crk - Golden", "short_name": "Golden"},
     
     # Boulder Creek
     "BOCOROCO": {"name": "Boulder Crk - Orodell", "short_name": "Orodell"},
     "BOCBGRCO": {"name": "Boulder Crk - Boulder", "short_name": "Boulder"},
+    
+    # North Saint Vrain
+    "NSVBRPCO": {"name": "N. St. Vrain - Button Rock", "short_name": "Button Rock"},
     
     # Big Thompson
     "BTHFESCO": {"name": "Big Thompson - Estes Park", "short_name": "Estes Park"},
