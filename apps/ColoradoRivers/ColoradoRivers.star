@@ -615,185 +615,165 @@ def render_station_frame(station, config, scale, is_wide):
             else:
                 pct_color = "#FF6600"  # Orange - high
         
-        return render.Box(
-            width = canvas.width(),
-            height = canvas.height(),
+        # Wide layout (128x64) - use Tempest-style fonts
+        font_large = "10x20"
+        font_med = "6x13"
+        font_small = "6x10"
+        
+        # Row 1: River name + condition
+        row1 = render.Row(
+            expanded = True,
+            main_align = "space_between",
+            cross_align = "center",
+            children = [
+                render.Text(
+                    content = display_name,
+                    font = font_med,
+                    color = "#FFFFFF",
+                ),
+                render.Box(
+                    color = condition_color if condition_text else "#333333",
+                    child = render.Padding(
+                        pad = (2, 1, 2, 1),
+                        child = render.Text(
+                            content = condition_text if condition_text else "---",
+                            font = font_small,
+                            color = "#000000" if condition_text else "#666666",
+                        ),
+                    ),
+                ),
+            ],
+        )
+        
+        # Row 2: Large CFS value + trend
+        row2 = render.Row(
+            expanded = True,
+            main_align = "center",
+            cross_align = "center",
+            children = [
+                render.Text(
+                    content = value_with_units,
+                    font = font_large,
+                    color = data_color,
+                ),
+                render.Padding(
+                    pad = (4, 0, 0, 0),
+                    child = render.Text(
+                        content = trend_indicator if show_trend else "",
+                        font = font_large,
+                        color = trend_color,
+                    ),
+                ),
+            ],
+        )
+        
+        # Row 3: Water temp + Ideal range
+        row3 = render.Row(
+            expanded = True,
+            main_align = "space_between",
+            cross_align = "center",
+            children = [
+                render.Text(
+                    content = "H2O: " + (temp_display if temp_display else "--"),
+                    font = font_small,
+                    color = temp_color,
+                ),
+                render.Text(
+                    content = "Ideal: " + (range_display if range_display else "--"),
+                    font = font_small,
+                    color = "#888888",
+                ),
+            ],
+        )
+        
+        # Row 4: Time + % of ideal
+        pct_text = (pct_display + " ideal") if pct_display else ""
+        row4 = render.Row(
+            expanded = True,
+            main_align = "space_between",
+            cross_align = "center",
+            children = [
+                render.Text(
+                    content = meas_time if meas_time else "--:--",
+                    font = font_small,
+                    color = "#666666",
+                ),
+                render.Text(
+                    content = pct_text,
+                    font = font_small,
+                    color = pct_color,
+                ),
+            ],
+        )
+        
+        return render.Padding(
+            pad = 2,
             child = render.Column(
-                children = [
-                    # Row 1: River name (left) | Condition badge (right) - 14px
-                    render.Row(
-                        main_align = "space_between",
-                        expanded = True,
-                        cross_align = "center",
-                        children = [
-                            render.Marquee(
-                                width = canvas.width() - 40,
-                                child = render.Text(
-                                    content = display_name,
-                                    font = "6x13",
-                                    color = "#FFFFFF",
-                                ),
-                            ),
-                            render.Box(
-                                color = condition_color if condition_text else "#333333",
-                                child = render.Padding(
-                                    pad = (2, 1, 2, 1),
-                                    child = render.Text(
-                                        content = condition_text if condition_text else "---",
-                                        font = "tom-thumb",
-                                        color = "#000000" if condition_text else "#666666",
-                                    ),
-                                ),
-                            ),
-                        ],
-                    ),
-                    # Spacer
-                    render.Box(height = 2),
-                    # Row 2: Main CFS value with trend (large, centered) - 20px
-                    render.Row(
-                        main_align = "center",
-                        cross_align = "center",
-                        expanded = True,
-                        children = [
-                            render.Text(
-                                content = value_with_units,
-                                font = "Dina_r400-6",
-                                color = data_color,
-                            ),
-                            render.Box(width = 4, height = 1),
-                            render.Text(
-                                content = trend_indicator if show_trend else "",
-                                font = "Dina_r400-6",
-                                color = trend_color,
-                            ),
-                        ],
-                    ),
-                    # Spacer
-                    render.Box(height = 2),
-                    # Row 3: Water temp (left) | Ideal range (right) - 8px
-                    render.Row(
-                        main_align = "space_between",
-                        expanded = True,
-                        children = [
-                            render.Row(
-                                children = [
-                                    render.Text(
-                                        content = "H2O: ",
-                                        font = "tom-thumb",
-                                        color = "#666666",
-                                    ),
-                                    render.Text(
-                                        content = temp_display if temp_display else "--",
-                                        font = "tom-thumb",
-                                        color = temp_color,
-                                    ),
-                                ],
-                            ),
-                            render.Row(
-                                children = [
-                                    render.Text(
-                                        content = "Ideal: ",
-                                        font = "tom-thumb",
-                                        color = "#666666",
-                                    ),
-                                    render.Text(
-                                        content = range_display if range_display else "--",
-                                        font = "tom-thumb",
-                                        color = "#888888",
-                                    ),
-                                ],
-                            ),
-                        ],
-                    ),
-                    # Spacer
-                    render.Box(height = 2),
-                    # Row 4: Time (left) | % of ideal (right) - 8px
-                    render.Row(
-                        main_align = "space_between",
-                        expanded = True,
-                        children = [
-                            render.Text(
-                                content = meas_time if meas_time else "--:--",
-                                font = "tom-thumb",
-                                color = "#666666",
-                            ),
-                            render.Row(
-                                children = [
-                                    render.Text(
-                                        content = pct_display if pct_display else "",
-                                        font = "tom-thumb",
-                                        color = pct_color,
-                                    ),
-                                    render.Text(
-                                        content = " ideal" if pct_display else "",
-                                        font = "tom-thumb",
-                                        color = "#666666",
-                                    ),
-                                ],
-                            ),
-                        ],
-                    ),
-                ],
+                expanded = True,
+                main_align = "space_evenly",
+                cross_align = "start",
+                children = [row1, row2, row3, row4],
             ),
         )
     else:
         # Standard layout (64x32 or 128x32)
-        return render.Box(
-            width = canvas.width(),
-            height = canvas.height(),
-            padding = 1,
+        row1 = render.Marquee(
+            width = 60,
+            child = render.Text(
+                content = display_name,
+                font = title_font,
+                color = "#FFFFFF",
+            ),
+            offset_start = 0,
+            offset_end = 0,
+        )
+        
+        row2 = render.Row(
+            expanded = True,
+            main_align = "center",
+            cross_align = "center",
+            children = [
+                render.Text(
+                    content = value_with_units,
+                    font = value_font,
+                    color = data_color,
+                ),
+                render.Padding(
+                    pad = (2, 0, 0, 0),
+                    child = render.Text(
+                        content = trend_indicator if show_trend else "",
+                        font = value_font,
+                        color = trend_color,
+                    ),
+                ),
+            ],
+        )
+        
+        row3 = render.Row(
+            expanded = True,
+            main_align = "space_between",
+            cross_align = "center",
+            children = [
+                render.Text(
+                    content = condition_text if show_condition else "",
+                    font = small_font,
+                    color = condition_color,
+                ),
+                render.Text(
+                    content = meas_time,
+                    font = small_font,
+                    color = "#666666",
+                ),
+            ],
+        )
+        
+        return render.Padding(
+            pad = 1,
             child = render.Column(
                 expanded = True,
-                main_align = "space_between",
+                main_align = "space_evenly",
                 cross_align = "center",
-                children = [
-                    # River name at top
-                    render.Marquee(
-                        width = canvas.width() - 4,
-                        child = render.Text(
-                            content = display_name,
-                            font = title_font,
-                            color = "#FFFFFF",
-                        ),
-                        offset_start = 0,
-                        offset_end = 0,
-                    ),
-                    # Main value display with units and trend
-                    render.Row(
-                        main_align = "center",
-                        cross_align = "center",
-                        children = [
-                            render.Text(
-                                content = value_with_units,
-                                font = value_font,
-                                color = data_color,
-                            ),
-                            render.Box(width = 2, height = 1),
-                            render.Text(
-                                content = trend_indicator if show_trend else "",
-                                font = value_font,
-                                color = trend_color,
-                            ),
-                        ],
-                    ),
-                    # Bottom row: condition, time
-                    render.Row(
-                        main_align = "space_between",
-                        expanded = True,
-                        children = [
-                            render.Text(
-                                content = condition_text if show_condition else "",
-                                font = small_font,
-                                color = condition_color,
-                            ),
-                            render.Text(
-                                content = meas_time,
-                                font = small_font,
-                                color = "#666666",
-                            ),
-                        ],
-                    ),
-                ],
+                children = [row1, row2, row3],
             ),
         )
 
@@ -851,24 +831,12 @@ def render_multi_station(stations_data, config, scale, is_wide, delay):
 def main(config):
     """Main entry point for the app."""
     
-    # Detect display dimensions
-    is_2x = canvas.is2x()
-    scale = 2 if is_2x else 1
-    width = canvas.width()
-    height = canvas.height()
-    
-    # Debug: uncomment to see what dimensions we're getting
-    # print("Canvas: {}x{}, is_2x={}".format(width, height, is_2x))
-    
-    # Detect if we have enough height for 4-row layout
-    # 128x64 (2x mode) = wide and tall, use 4-row layout
-    # 128x32 (S3 Wide) = wide but short, use standard layout
-    # 64x32 (standard) = use standard layout
-    # Only use 4-row layout if height > 32 (need room for 4 rows)
-    is_wide = height > 32 and width > 64
+    # Detect wide display (S3 Wide is 128x64 in 2x mode)
+    is_wide = canvas.is2x()
+    scale = 2 if is_wide else 1
     
     # Adjust animation delay for consistent perceived speed
-    delay = 25 if is_2x else 50
+    delay = 25 if is_wide else 50
     
     display_mode = config.get("display_mode", "single")
     
