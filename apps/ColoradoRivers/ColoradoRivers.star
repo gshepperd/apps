@@ -502,10 +502,6 @@ def render_station_frame(station, config, scale, is_wide):
         value_font = "6x13"
         small_font = "tom-thumb"
     
-    # Calculate dimensions based on scale
-    display_width = canvas.width()
-    marquee_width = (display_width - 4) if is_wide else 62
-    
     if not station:
         return render.Box(
             child = render.Column(
@@ -620,6 +616,8 @@ def render_station_frame(station, config, scale, is_wide):
                 pct_color = "#FF6600"  # Orange - high
         
         return render.Box(
+            width = canvas.width(),
+            height = canvas.height(),
             padding = 2,
             child = render.Column(
                 expanded = True,
@@ -632,7 +630,7 @@ def render_station_frame(station, config, scale, is_wide):
                         cross_align = "center",
                         children = [
                             render.Marquee(
-                                width = 90,
+                                width = canvas.width() - 40,
                                 child = render.Text(
                                     content = display_name,
                                     font = "6x13",
@@ -679,7 +677,7 @@ def render_station_frame(station, config, scale, is_wide):
                             render.Row(
                                 children = [
                                     render.Text(
-                                        content = "H2O:",
+                                        content = "H2O: ",
                                         font = "tom-thumb",
                                         color = "#666666",
                                     ),
@@ -693,7 +691,7 @@ def render_station_frame(station, config, scale, is_wide):
                             render.Row(
                                 children = [
                                     render.Text(
-                                        content = "Ideal:",
+                                        content = "Ideal: ",
                                         font = "tom-thumb",
                                         color = "#666666",
                                     ),
@@ -736,8 +734,10 @@ def render_station_frame(station, config, scale, is_wide):
             ),
         )
     else:
-        # Standard layout (64x32)
+        # Standard layout (64x32 or 128x32)
         return render.Box(
+            width = canvas.width(),
+            height = canvas.height(),
             padding = 1,
             child = render.Column(
                 expanded = True,
@@ -746,7 +746,7 @@ def render_station_frame(station, config, scale, is_wide):
                 children = [
                     # River name at top
                     render.Marquee(
-                        width = marquee_width,
+                        width = canvas.width() - 4,
                         child = render.Text(
                             content = display_name,
                             font = title_font,
@@ -853,8 +853,12 @@ def main(config):
     scale = 2 if is_2x else 1
     width = canvas.width()
     
-    # Detect wide display (128x32 S3 Wide or 128x64 2x)
-    is_wide = width > 64
+    # Detect wide display with enough height for 4-row layout
+    # 128x64 (2x mode) = wide and tall, use 4-row layout
+    # 128x32 (S3 Wide) = wide but short, use standard layout with wider marquee
+    # 64x32 (standard) = use standard layout
+    # Only use wide 4-row layout if we're in 2x mode (which gives us 64px height)
+    is_wide = is_2x and width > 64
     
     # Adjust animation delay for consistent perceived speed
     # Marquee moves 1px per frame, so faster delay on 2x keeps same speed
