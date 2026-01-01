@@ -455,14 +455,12 @@ def format_time(time_str):
     
     # Parse ISO time and format nicely
     # Time comes in format like "2025-12-29T19:15:00-07:00"
-    try:
-        # Extract just the time portion
-        if "T" in time_str:
-            time_part = time_str.split("T")[1]
+    # Extract just the time portion
+    if "T" in time_str:
+        time_part = time_str.split("T")[1]
+        if len(time_part) >= 5:
             hour_min = time_part[:5]  # "HH:MM"
             return hour_min
-    except:
-        pass
     
     return ""
 
