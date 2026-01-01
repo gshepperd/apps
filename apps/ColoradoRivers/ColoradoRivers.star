@@ -25,13 +25,23 @@ DWR_API_BASE = "https://dwr.state.co.us/Rest/GET/api/v2"
 # Parameter 00060 = discharge in cubic feet per second
 USGS_API_BASE = "https://waterservices.usgs.gov/nwis/iv"
 
-# Stations that use USGS as primary data source (no DWR station exists)
+# Stations that use USGS as primary data source (no DWR station exists or DWR proxies USGS)
 # Format: internal_abbrev: {"usgs_site": site_number, "name": display_name, "short_name": short}
 USGS_FLOW_STATIONS = {
     "BCREVERCO": {
         "usgs_site": "06710385",
         "name": "Bear Creek Above Evergreen",
         "short_name": "Evergreen",
+    },
+    "CLEIDACO": {
+        "usgs_site": "06717500",
+        "name": "Clear Creek at Idaho Springs",
+        "short_name": "Idaho Spr",
+    },
+    "PLABRUCO": {
+        "usgs_site": "06701900",
+        "name": "S. Platte Below Brush Cr (Deckers)",
+        "short_name": "Deckers",
     },
 }
 
