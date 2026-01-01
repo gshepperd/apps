@@ -859,7 +859,6 @@ def main(config):
 
 def get_schema():
     """Return the configuration schema for the app."""
-    station_options = [
     # Build station options sorted by display name
     # First create list of (display_name, key) tuples, sort, then create options
     station_list = []
@@ -870,10 +869,9 @@ def get_schema():
     station_list = sorted(station_list)
     
     # Create schema options from sorted list
-    station_options = [
-        schema.Option(display = name, value = key)
-        for name, key in station_list
-    ]
+    station_options = []
+    for item in station_list:
+        station_options.append(schema.Option(display = item[0], value = item[1]))
     
     # Add "None" option for additional stations
     station_options_with_none = [schema.Option(display = "None", value = "")] + station_options
