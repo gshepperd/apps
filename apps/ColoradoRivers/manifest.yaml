@@ -1,0 +1,9 @@
+---
+id: colorado-rivers
+name: Colorado Rivers
+summary: Colorado river flows for fly fishing
+desc: Real-time streamflow with fly fishing condition indicators. Shows GO/GOOD/HIGH/LOW based on ideal wadeable CFS ranges, water temperature warnings (WARM/HOT alerts when trout are stressed), and flow trends. Covers 50+ stations including South Platte (Cheesman, Deckers), Arkansas River (Salida, Buena Vista), Blue River, Roaring Fork, and more Gold Medal waters. Built for anglers who want to know before they go.
+author: Greg
+fileName: colorado_rivers.star
+packageName: coloradorivers
+supports2x: true
