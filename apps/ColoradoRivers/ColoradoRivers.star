@@ -22,7 +22,18 @@ DWR_API_BASE = "https://dwr.state.co.us/Rest/GET/api/v2"
 
 # USGS Water Services API for temperature data
 # Parameter 00010 = water temperature in Celsius
+# Parameter 00060 = discharge in cubic feet per second
 USGS_API_BASE = "https://waterservices.usgs.gov/nwis/iv"
+
+# Stations that use USGS as primary data source (no DWR station exists)
+# Format: internal_abbrev: {"usgs_site": site_number, "name": display_name, "short_name": short}
+USGS_FLOW_STATIONS = {
+    "BCREVERCO": {
+        "usgs_site": "06710385",
+        "name": "Bear Creek Above Evergreen",
+        "short_name": "Evergreen",
+    },
+}
 
 # Mapping from CO DWR station abbreviations to USGS site numbers with temperature sensors
 # This allows us to get temperature from USGS when DWR doesn't have it
@@ -36,7 +47,7 @@ DWR_TO_USGS_TEMP = {
     
     # South Platte stations - try nearby USGS sites
     "PLACHECO": "06701900",   # Cheesman - try North Fork below reservoir
-    "PLATRUCO": "06701900",   # Trumbull/Deckers area
+    "PLABRUCO": "06701900",   # Deckers/Trumbull area
     
     # Clear Creek
     "CLEIDACO": "06719505",   # Clear Creek at Golden
@@ -76,10 +87,10 @@ TEMP_THRESHOLDS = {
 RIVER_FLOW_RANGES = {
     # === PRIORITY RIVERS (detailed data from local fly shops) ===
     
-    # South Platte - Deckers (PLATRUCO = Trumbull gauge)
+    # South Platte - Deckers (PLABRUCO = Below Brush Creek near Trumbull)
     # Pat Dorsey: ideal 150-400 CFS, technical tailwater
     # Winter: 100-150 CFS typical, Summer: can spike to 600+
-    "PLATRUCO": {"min": 100, "max": 400, "ideal": 212, "type": "tailwater"},
+    "PLABRUCO": {"min": 100, "max": 400, "ideal": 212, "type": "tailwater"},
     
     # South Platte - Cheesman Canyon
     # Ultra-technical, PhD trout, crystal clear
@@ -93,11 +104,14 @@ RIVER_FLOW_RANGES = {
     # Summer dam releases can hit 600-900 CFS (blown out)
     "PLAWATCO": {"min": 40, "max": 200, "ideal": 75, "type": "tailwater"},
     
-    # Bear Creek - Evergreen
+    # Bear Creek - Evergreen (USGS data source)
     # Small water! 3-4wt rod, pocket water
     # Ideal: 12-25 CFS, fishable 8-50 CFS
     # Very low flows normal - this is a small creek
     "BCREVERCO": {"min": 8, "max": 50, "ideal": 15, "type": "freestone"},
+    
+    # Bear Creek - Morrison (DWR data source, downstream of Evergreen)
+    "BCRMORCO": {"min": 8, "max": 50, "ideal": 15, "type": "freestone"},
     
     # Clear Creek - Idaho Springs  
     # Freestone, pocket water, browns and rainbows
@@ -142,9 +156,6 @@ RIVER_FLOW_RANGES = {
     # === CLEAR CREEK (other stations) ===
     "CLEGOLCO": {"min": 40, "max": 150, "ideal": 70, "type": "freestone"},
     
-    # === BEAR CREEK (other stations) ===
-    "BCRMORCO": {"min": 10, "max": 60, "ideal": 20, "type": "freestone"},
-    
     # === BOULDER CREEK ===
     "BOCOROCO": {"min": 50, "max": 200, "ideal": 100, "type": "freestone"},
     "BOCBGRCO": {"min": 80, "max": 250, "ideal": 150, "type": "freestone"},
@@ -165,7 +176,7 @@ RIVER_FLOW_RANGES = {
 # Station abbreviations verified against CO DWR API
 RIVER_STATIONS = {
     # South Platte River
-    "PLATRUCO": {"name": "S. Platte - Trumbull (Deckers)", "short_name": "Deckers"},
+    "PLABRUCO": {"name": "S. Platte - Trumbull (Deckers)", "short_name": "Deckers"},
     "PLACHECO": {"name": "S. Platte - Cheesman", "short_name": "Cheesman"},
     "PLAWATCO": {"name": "S. Platte - Waterton", "short_name": "Waterton"},
     "PLACHACO": {"name": "S. Platte - Chatfield", "short_name": "Chatfield"},
@@ -174,7 +185,7 @@ RIVER_STATIONS = {
     "PLADENCO": {"name": "S. Platte - Denver", "short_name": "Denver"},
     "PLAHENCO": {"name": "S. Platte - Henderson", "short_name": "Henderson"},
     
-    # Bear Creek
+    # Bear Creek (Evergreen uses USGS, Morrison uses DWR)
     "BCREVERCO": {"name": "Bear Creek - Evergreen", "short_name": "Evergreen"},
     "BCRMORCO": {"name": "Bear Creek - Morrison", "short_name": "Morrison"},
     "BCROUTCO": {"name": "Bear Creek Reservoir Out", "short_name": "BCR Outlet"},
@@ -267,9 +278,13 @@ DATA_OPTIONS = {
 }
 
 def get_station_data(abbrev):
-    """Fetch current telemetry data for a station from CO DWR API."""
+    """Fetch current telemetry data for a station from CO DWR API or USGS."""
     if not abbrev:
         return None
+    
+    # Check if this is a USGS-only station first
+    if abbrev in USGS_FLOW_STATIONS:
+        return get_usgs_flow_data(abbrev)
         
     cache_key = "co_rivers_{}".format(abbrev)
     cached = cache.get(cache_key)
@@ -277,7 +292,7 @@ def get_station_data(abbrev):
     if cached:
         return json.decode(cached)
     
-    # Fetch station data with current readings
+    # Fetch station data with current readings from DWR
     url = "{}/telemetrystations/telemetrystation?format=json&abbrev={}".format(DWR_API_BASE, abbrev)
     
     resp = http.get(url, ttl_seconds = CACHE_TTL)
@@ -308,10 +323,125 @@ def get_station_data(abbrev):
     cache.set(cache_key, json.encode(result), ttl_seconds = CACHE_TTL)
     return result
 
+def get_usgs_flow_data(abbrev):
+    """Fetch current flow data from USGS for stations not in DWR."""
+    usgs_info = USGS_FLOW_STATIONS.get(abbrev)
+    if not usgs_info:
+        return None
+    
+    site_number = usgs_info.get("usgs_site")
+    if not site_number:
+        return None
+    
+    cache_key = "usgs_flow_{}".format(abbrev)
+    cached = cache.get(cache_key)
+    
+    if cached:
+        return json.decode(cached)
+    
+    # USGS API for instantaneous values, parameter 00060 = discharge (CFS)
+    url = "{}?sites={}&parameterCd=00060&format=json".format(USGS_API_BASE, site_number)
+    
+    resp = http.get(url, ttl_seconds = CACHE_TTL)
+    if resp.status_code != 200:
+        return None
+    
+    data = resp.json()
+    
+    # Navigate USGS JSON structure
+    time_series = data.get("value", {}).get("timeSeries", [])
+    if not time_series or len(time_series) == 0:
+        return None
+    
+    values = time_series[0].get("values", [])
+    if not values or len(values) == 0:
+        return None
+    
+    value_list = values[0].get("value", [])
+    if not value_list or len(value_list) == 0:
+        return None
+    
+    # Get the most recent value
+    latest = value_list[0]
+    cfs_value = float(latest.get("value", 0))
+    
+    result = {
+        "abbrev": abbrev,
+        "name": usgs_info.get("name", "Unknown"),
+        "water_source": "Bear Creek",
+        "parameter": "DISCHRG",
+        "value": cfs_value,
+        "units": "CFS",
+        "stage": None,
+        "meas_time": latest.get("dateTime", ""),
+        "latitude": None,
+        "longitude": None,
+        "status": "Active",
+        "source": "USGS",
+        "usgs_site": site_number,
+    }
+    
+    cache.set(cache_key, json.encode(result), ttl_seconds = CACHE_TTL)
+    return result
+
+def get_usgs_timeseries(abbrev):
+    """Fetch recent timeseries data from USGS for trend/stability display."""
+    usgs_info = USGS_FLOW_STATIONS.get(abbrev)
+    if not usgs_info:
+        return []
+    
+    site_number = usgs_info.get("usgs_site")
+    if not site_number:
+        return []
+    
+    cache_key = "usgs_ts_{}".format(abbrev)
+    cached = cache.get(cache_key)
+    
+    if cached:
+        return json.decode(cached)
+    
+    # Get last 24 hours of data for stability analysis
+    # USGS returns most recent first
+    url = "{}?sites={}&parameterCd=00060&format=json&period=P1D".format(USGS_API_BASE, site_number)
+    
+    resp = http.get(url, ttl_seconds = CACHE_TTL)
+    if resp.status_code != 200:
+        return []
+    
+    data = resp.json()
+    
+    time_series = data.get("value", {}).get("timeSeries", [])
+    if not time_series or len(time_series) == 0:
+        return []
+    
+    values = time_series[0].get("values", [])
+    if not values or len(values) == 0:
+        return []
+    
+    value_list = values[0].get("value", [])
+    
+    # Convert USGS format to match DWR format for compatibility
+    results = []
+    for v in value_list:
+        results.append({
+            "measValue": float(v.get("value", 0)),
+            "measDateTime": v.get("dateTime", ""),
+        })
+    
+    # USGS returns oldest first, we want newest first
+    results = list(reversed(results))
+    
+    cache.set(cache_key, json.encode(results), ttl_seconds = CACHE_TTL)
+    return results
+
 def get_station_timeseries(abbrev, parameter):
     """Fetch recent timeseries data for trend display."""
     if not abbrev:
         return []
+    
+    # Check if this is a USGS-only station
+    if abbrev in USGS_FLOW_STATIONS:
+        return get_usgs_timeseries(abbrev)
         
     cache_key = "co_rivers_ts_{}_{}".format(abbrev, parameter)
     cached = cache.get(cache_key)
@@ -319,7 +449,7 @@ def get_station_timeseries(abbrev, parameter):
     if cached:
         return json.decode(cached)
     
-    url = "{}/telemetrystations/telemetrytimeseriesraw?format=json&abbrev={}&parameter={}&pageSize=10".format(
+    url = "{}/telemetrystations/telemetrytimeseriesraw?format=json&abbrev={}&parameter={}&pageSize=100".format(
         DWR_API_BASE, abbrev, parameter
     )
     
