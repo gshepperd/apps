@@ -704,6 +704,22 @@ def render_station_frame(station, config, scale, is_wide):
             ),
         )
     
+    # Check if this is a failed station load
+    if station.get("failed"):
+        abbrev = station.get("abbrev", "???")
+        display_name = RIVER_STATIONS.get(abbrev, {}).get("short_name", abbrev)
+        return render.Box(
+            child = render.Column(
+                cross_align = "center",
+                main_align = "center",
+                children = [
+                    render.Text(display_name, color = "#FFFFFF", font = small_font),
+                    render.Text("API Error", color = "#FF0000", font = value_font if scale == 2 else "6x13"),
+                    render.Text(abbrev, font = small_font, color = "#888888"),
+                ],
+            ),
+        )
+    
     abbrev = station.get("abbrev", "")
     display_name = RIVER_STATIONS.get(abbrev, {}).get("short_name", station.get("name", "Unknown")[:12])
     
@@ -964,20 +980,13 @@ def render_multi_station(stations_data, config, scale, is_wide, delay):
     # Get display duration from config (in seconds, default 4)
     display_duration = int(config.get("display_duration", "4"))
     
-    # Traditional Tidbyt animation: 50ms delay, duplicate frames for duration
-    # 50ms * 80 = 4 seconds per station
-    frame_delay = 50
-    frames_per_station = display_duration * 20  # 20 frames per second
-    
-    # Cap frames per station to avoid memory issues
-    if frames_per_station > 100:
-        frames_per_station = 100
+    # Use longer delay with fewer frames to reduce total frame count
+    # 250ms * 16 = 4 seconds per station
+    frame_delay = 250
+    frames_per_station = display_duration * 4  # 4 frames per second at 250ms
     
     for station in stations_data:
-        if not station:
-            continue
-        
-        # Create the frame once for this station
+        # Create the frame for this station (handles None case)
         station_frame = render_station_frame(station, config, scale, is_wide)
         
         # Duplicate for desired display duration
@@ -995,9 +1004,9 @@ def render_multi_station(stations_data, config, scale, is_wide, delay):
             ),
         )
     
-    # Always use Animation - even for single station it should work
     return render.Root(
         delay = frame_delay,
+        show_full_animation = True,
         child = render.Animation(
             children = frames,
         ),
@@ -1035,9 +1044,15 @@ def main(config):
         return render_single_station(station_data, config, scale, is_wide, delay)
     else:
         # Multi station mode - cycle through all configured stations
+        # Pass tuples of (abbrev, data) so we can show which station failed
         stations_data = []
         for s in stations:
-            stations_data.append(get_station_data(s))
+            data = get_station_data(s)
+            # If data is None, create a minimal dict with just the abbrev for error display
+            if data:
+                stations_data.append(data)
+            else:
+                stations_data.append({"abbrev": s, "failed": True})
         return render_multi_station(stations_data, config, scale, is_wide, delay)
 
 def get_schema():
