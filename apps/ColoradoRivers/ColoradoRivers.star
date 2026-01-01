@@ -840,8 +840,8 @@ def main(config):
     
     stations = []
     for key in station_keys:
-        station_abbrev = config.get(key, "")
-        if station_abbrev:
+        station_abbrev = config.get(key, "none")
+        if station_abbrev and station_abbrev != "none":
             stations.append(station_abbrev)
     
     # Default to PLACHECO if nothing configured
@@ -874,7 +874,7 @@ def get_schema():
         station_options.append(schema.Option(display = item[0], value = item[1]))
     
     # Add "None" option for additional stations
-    station_options_with_none = [schema.Option(display = "None", value = "")] + station_options
+    station_options_with_none = [schema.Option(display = "None", value = "none")] + station_options
     
     # Duration options
     duration_options = [
@@ -943,7 +943,7 @@ def get_schema():
                 name = "Station 2",
                 desc = "Second station (multi mode)",
                 icon = "water",
-                default = "",
+                default = "none",
                 options = station_options_with_none,
             ),
             schema.Dropdown(
@@ -951,7 +951,7 @@ def get_schema():
                 name = "Station 3",
                 desc = "Third station (multi mode)",
                 icon = "water",
-                default = "",
+                default = "none",
                 options = station_options_with_none,
             ),
             schema.Dropdown(
@@ -959,7 +959,7 @@ def get_schema():
                 name = "Station 4",
                 desc = "Fourth station (multi mode)",
                 icon = "water",
-                default = "",
+                default = "none",
                 options = station_options_with_none,
             ),
             schema.Dropdown(
@@ -967,7 +967,7 @@ def get_schema():
                 name = "Station 5",
                 desc = "Fifth station (multi mode)",
                 icon = "water",
-                default = "",
+                default = "none",
                 options = station_options_with_none,
             ),
             schema.Dropdown(
@@ -975,7 +975,7 @@ def get_schema():
                 name = "Station 6",
                 desc = "Sixth station (multi mode)",
                 icon = "water",
-                default = "",
+                default = "none",
                 options = station_options_with_none,
             ),
             schema.Dropdown(
@@ -983,7 +983,7 @@ def get_schema():
                 name = "Station 7",
                 desc = "Seventh station (multi mode)",
                 icon = "water",
-                default = "",
+                default = "none",
                 options = station_options_with_none,
             ),
             schema.Dropdown(
@@ -991,7 +991,7 @@ def get_schema():
                 name = "Station 8",
                 desc = "Eighth station (multi mode)",
                 icon = "water",
-                default = "",
+                default = "none",
                 options = station_options_with_none,
             ),
             schema.Dropdown(
@@ -999,7 +999,7 @@ def get_schema():
                 name = "Station 9",
                 desc = "Ninth station (multi mode)",
                 icon = "water",
-                default = "",
+                default = "none",
                 options = station_options_with_none,
             ),
             schema.Dropdown(
@@ -1007,7 +1007,7 @@ def get_schema():
                 name = "Station 10",
                 desc = "Tenth station (multi mode)",
                 icon = "water",
-                default = "",
+                default = "none",
                 options = station_options_with_none,
             ),
         ],
