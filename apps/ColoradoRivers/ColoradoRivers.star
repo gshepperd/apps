@@ -20,6 +20,43 @@ load("time.star", "time")
 # Colorado DWR API base URL
 DWR_API_BASE = "https://dwr.state.co.us/Rest/GET/api/v2"
 
+# USGS Water Services API for temperature data
+# Parameter 00010 = water temperature in Celsius
+USGS_API_BASE = "https://waterservices.usgs.gov/nwis/iv"
+
+# Mapping from CO DWR station abbreviations to USGS site numbers with temperature sensors
+# This allows us to get temperature from USGS when DWR doesn't have it
+# Format: DWR_abbrev: USGS_site_number
+DWR_TO_USGS_TEMP = {
+    # Arkansas River stations
+    "ABORECO": "07087050",    # Arkansas below Granite (near Buena Vista)
+    "ARKCANCO": "07096000",   # Arkansas at Canon City - has temp!
+    "ARKWELCO": "07093700",   # Arkansas near Wellsville
+    "ARKSFOCO": "07091500",   # Arkansas at Salida
+    
+    # South Platte stations - try nearby USGS sites
+    "PLACHECO": "06701900",   # Cheesman - try North Fork below reservoir
+    "PLATRUCO": "06701900",   # Trumbull/Deckers area
+    
+    # Clear Creek
+    "CLEIDACO": "06719505",   # Clear Creek at Golden
+    
+    # Blue River  
+    "BLUGRRCO": "09050700",   # Blue River below Green Mountain
+    
+    # Colorado River
+    "COLKRMCO": "09058000",   # Colorado near Kremmling
+    
+    # Gunnison
+    "GUNRIOCO": "09114500",   # Gunnison River near Gunnison
+    
+    # Roaring Fork
+    "ROFASPEN": "09073400",   # Roaring Fork at Aspen
+    
+    # Fryingpan
+    "FRYBASLT": "09080400",   # Fryingpan near Basalt
+}
+
 # Cache TTL in seconds (15 minutes - data updates every 15 min)
 CACHE_TTL = 900
 
@@ -297,7 +334,7 @@ def get_station_timeseries(abbrev, parameter):
     return results
 
 def get_water_temp(abbrev):
-    """Try to fetch water temperature for a station."""
+    """Try to fetch water temperature for a station from DWR or USGS."""
     if not abbrev:
         return None
         
@@ -311,30 +348,76 @@ def get_water_temp(abbrev):
             return None
         return decoded
     
+    # Try CO DWR first
     url = "{}/telemetrystations/telemetrytimeseriesraw?format=json&abbrev={}&parameter=WATTEMP&pageSize=1".format(
         DWR_API_BASE, abbrev
     )
     
     resp = http.get(url, ttl_seconds = CACHE_TTL)
+    if resp.status_code == 200:
+        data = resp.json()
+        results = data.get("ResultList", [])
+        
+        if results and len(results) > 0:
+            temp_data = {
+                "value": results[0].get("measValue"),
+                "units": results[0].get("units", "F"),
+                "time": results[0].get("measDateTime", ""),
+                "source": "DWR",
+            }
+            cache.set(cache_key, json.encode(temp_data), ttl_seconds = CACHE_TTL)
+            return temp_data
+    
+    # Try USGS as fallback if we have a mapping
+    usgs_site = DWR_TO_USGS_TEMP.get(abbrev)
+    if usgs_site:
+        temp_data = get_usgs_water_temp(usgs_site)
+        if temp_data:
+            cache.set(cache_key, json.encode(temp_data), ttl_seconds = CACHE_TTL)
+            return temp_data
+    
+    # No temperature data available
+    cache.set(cache_key, json.encode({"no_data": True}), ttl_seconds = CACHE_TTL)
+    return None
+
+def get_usgs_water_temp(site_number):
+    """Fetch water temperature from USGS Water Services API."""
+    if not site_number:
+        return None
+    
+    # USGS API for instantaneous values, parameter 00010 = water temp (Celsius)
+    url = "{}?sites={}&parameterCd=00010&format=json".format(USGS_API_BASE, site_number)
+    
+    resp = http.get(url, ttl_seconds = CACHE_TTL)
     if resp.status_code != 200:
-        cache.set(cache_key, json.encode({"no_data": True}), ttl_seconds = CACHE_TTL)
         return None
     
     data = resp.json()
-    results = data.get("ResultList", [])
     
-    if not results or len(results) == 0:
-        cache.set(cache_key, json.encode({"no_data": True}), ttl_seconds = CACHE_TTL)
+    # Navigate USGS JSON structure to get the value
+    # Structure: value.timeSeries[0].values[0].value[0].value
+    time_series = data.get("value", {}).get("timeSeries", [])
+    if not time_series or len(time_series) == 0:
         return None
     
-    temp_data = {
-        "value": results[0].get("measValue"),
-        "units": results[0].get("units", "F"),
-        "time": results[0].get("measDateTime", ""),
-    }
+    values = time_series[0].get("values", [])
+    if not values or len(values) == 0:
+        return None
     
-    cache.set(cache_key, json.encode(temp_data), ttl_seconds = CACHE_TTL)
-    return temp_data
+    value_list = values[0].get("value", [])
+    if not value_list or len(value_list) == 0:
+        return None
+    
+    # USGS returns temperature in Celsius, convert to Fahrenheit
+    temp_c = float(value_list[0].get("value", 0))
+    temp_f = (temp_c * 9 / 5) + 32
+    
+    return {
+        "value": temp_f,
+        "units": "F",
+        "time": value_list[0].get("dateTime", ""),
+        "source": "USGS",
+    }
 
 def calculate_trend(timeseries):
     """Calculate trend direction from recent readings."""
@@ -389,6 +472,17 @@ def get_fishing_condition(abbrev, cfs_value, temp_value = None):
     """
     Evaluate fishing conditions based on CFS and optionally water temp.
     Returns: (condition_code, condition_text, color)
+    
+    Labels are fishing-quality focused, not water-level focused:
+    - FISH! = Prime conditions, go now!
+    - GOOD = Good fishing, worth the trip
+    - FAIR = Fishable but not ideal
+    - SKIP = Poor conditions, don't bother
+    - TOUGH = High water, difficult wading
+    - BLOWN = Unfishable, way too high
+    - TOO HOT = Dangerous for fish, stop fishing
+    - WARM = Stress zone, fish early/late
+    - SLOW = Cold water, sluggish fish
     """
     if cfs_value == None:
         return "unknown", "?", "#888888"
@@ -399,11 +493,11 @@ def get_fishing_condition(abbrev, cfs_value, temp_value = None):
     if temp_value != None:
         temp = float(temp_value)
         if temp >= TEMP_THRESHOLDS["danger"]:
-            return "hot", "HOT!", "#FF0000"
+            return "hot", "TOO HOT", "#FF0000"
         elif temp >= TEMP_THRESHOLDS["caution"]:
             return "warm", "WARM", "#FF6600"
         elif temp < TEMP_THRESHOLDS["cold"]:
-            return "cold", "COLD", "#6699FF"
+            return "cold", "SLOW", "#6699FF"
     
     # Check flow conditions
     flow_range = RIVER_FLOW_RANGES.get(abbrev)
@@ -415,19 +509,19 @@ def get_fishing_condition(abbrev, cfs_value, temp_value = None):
     max_cfs = flow_range["max"]
     ideal_cfs = flow_range["ideal"]
     
-    # Calculate how close to ideal
+    # Evaluate fishing quality (not just water level)
     if cfs < min_cfs * 0.7:
-        return "low", "LOW", "#FFCC00"
+        return "low", "SKIP", "#FFCC00"       # Too low, poor fishing
     elif cfs < min_cfs:
-        return "fair", "OK", "#CCCC00"
+        return "fair", "FAIR", "#CCCC00"      # Marginal, fishable
     elif cfs <= ideal_cfs * 1.1 and cfs >= ideal_cfs * 0.8:
-        return "prime", "GO!", "#00FF00"
+        return "prime", "FISH!", "#00FF00"    # Prime conditions!
     elif cfs <= max_cfs:
-        return "good", "GOOD", "#88FF00"
+        return "good", "GOOD", "#88FF00"      # Good fishing
     elif cfs <= max_cfs * 1.3:
-        return "high", "HIGH", "#FF9900"
+        return "high", "TOUGH", "#FF9900"     # High water, hard wading
     else:
-        return "high", "BLOWN", "#FF0000"
+        return "high", "BLOWN", "#FF0000"     # Unfishable
 
 def format_decimal(val, decimals):
     """Format a float with specified decimal places (Starlark compatible)."""
@@ -620,7 +714,7 @@ def render_station_frame(station, config, scale, is_wide):
         font_med = "6x13"
         font_small = "6x10"
         
-        # Row 1: River name + condition (no Box wrapper)
+        # Row 1: River name + condition
         row1 = render.Row(
             expanded = True,
             main_align = "space_between",
@@ -661,41 +755,37 @@ def render_station_frame(station, config, scale, is_wide):
             ],
         )
         
-        # Row 3: Water temp + Ideal range
+        # Row 3: Water temp (if available) + % of ideal
+        pct_text = (pct_display + " ideal") if pct_display else ""
+        temp_text = "H2O: " + temp_display if temp_display else ""
         row3 = render.Row(
             expanded = True,
             main_align = "space_between",
             cross_align = "center",
             children = [
                 render.Text(
-                    content = "H2O: " + (temp_display if temp_display else "--"),
+                    content = temp_text,
                     font = font_small,
                     color = temp_color,
-                ),
-                render.Text(
-                    content = "Ideal: " + (range_display if range_display else "--"),
-                    font = font_small,
-                    color = "#888888",
-                ),
-            ],
-        )
-        
-        # Row 4: Time + % of ideal
-        pct_text = (pct_display + " ideal") if pct_display else ""
-        row4 = render.Row(
-            expanded = True,
-            main_align = "space_between",
-            cross_align = "center",
-            children = [
-                render.Text(
-                    content = meas_time if meas_time else "--:--",
-                    font = font_small,
-                    color = "#666666",
                 ),
                 render.Text(
                     content = pct_text,
                     font = font_small,
                     color = pct_color,
+                ),
+            ],
+        )
+        
+        # Row 4: Ideal range
+        row4 = render.Row(
+            expanded = True,
+            main_align = "center",
+            cross_align = "center",
+            children = [
+                render.Text(
+                    content = "Ideal: " + (range_display if range_display else "--") + " CFS",
+                    font = font_small,
+                    color = "#888888",
                 ),
             ],
         )
@@ -745,18 +835,13 @@ def render_station_frame(station, config, scale, is_wide):
         
         row3 = render.Row(
             expanded = True,
-            main_align = "space_between",
+            main_align = "center",
             cross_align = "center",
             children = [
                 render.Text(
                     content = condition_text if show_condition else "",
                     font = small_font,
                     color = condition_color,
-                ),
-                render.Text(
-                    content = meas_time,
-                    font = small_font,
-                    color = "#666666",
                 ),
             ],
         )
