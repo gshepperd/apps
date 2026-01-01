@@ -450,6 +450,102 @@ def calculate_trend(timeseries):
     else:
         return "stable", change_pct
 
+def calculate_flow_stability(timeseries):
+    """
+    Calculate flow stability over time for fishing assessment.
+    Returns: (label, duration_text, change_pct, color)
+    
+    Stability is key for fishing:
+    - STABLE flows = fish settled, predictable feeding
+    - RISING flows = fish often stop feeding, repositioning
+    - FALLING flows = can trigger feeding, but watch for stranding
+    - Rapid changes = tough fishing regardless of direction
+    """
+    if not timeseries or len(timeseries) < 2:
+        return "---", "", 0, "#888888"
+    
+    # Extract values and timestamps
+    readings = []
+    for reading in timeseries:
+        val = reading.get("measValue")
+        time_str = reading.get("measDateTime", "")
+        if val != None:
+            readings.append({"value": float(val), "time": time_str})
+    
+    if len(readings) < 2:
+        return "---", "", 0, "#888888"
+    
+    current = readings[0]["value"]
+    
+    # Analyze stability over different time windows
+    # DWR data is 15-min intervals, so:
+    # 4 readings = 1 hour, 24 readings = 6 hours, 96 readings = 24 hours
+    
+    # Calculate changes at different windows
+    windows = [
+        {"count": 4, "label": "1h"},    # 1 hour
+        {"count": 12, "label": "3h"},   # 3 hours  
+        {"count": 24, "label": "6h"},   # 6 hours
+        {"count": 48, "label": "12h"},  # 12 hours
+        {"count": 96, "label": "24h"},  # 24 hours
+    ]
+    
+    # Find the longest stable period
+    stable_duration = ""
+    max_change_pct = 0.0
+    
+    for window in windows:
+        if len(readings) >= window["count"]:
+            # Get value at end of window
+            past_value = readings[window["count"] - 1]["value"]
+            if past_value > 0:
+                change_pct = ((current - past_value) / past_value) * 100
+                
+                # Track max change
+                if abs(change_pct) > abs(max_change_pct):
+                    max_change_pct = change_pct
+                
+                # If change is within ±10%, consider it stable for this window
+                if abs(change_pct) <= 10:
+                    stable_duration = window["label"]
+    
+    # Calculate the change over the available data
+    if len(readings) >= 4:
+        ref_idx = min(24, len(readings) - 1)  # Use 6h or max available
+        ref_value = readings[ref_idx]["value"]
+        if ref_value > 0:
+            change_pct = ((current - ref_value) / ref_value) * 100
+        else:
+            change_pct = 0
+    else:
+        change_pct = 0
+    
+    # Determine label and color based on stability analysis
+    if stable_duration:
+        # Flows have been stable
+        if stable_duration == "24h":
+            return "STEADY", "24h", change_pct, "#00FF00"  # Green - very stable
+        elif stable_duration in ["12h", "6h"]:
+            return "STABLE", stable_duration, change_pct, "#88FF00"  # Light green
+        else:
+            return "STABLE", stable_duration, change_pct, "#CCFF00"  # Yellow-green
+    else:
+        # Flows are changing
+        if change_pct > 30:
+            return "SURGE", "", change_pct, "#FF0000"  # Red - big rise
+        elif change_pct > 15:
+            return "RISING", "", change_pct, "#FF9900"  # Orange
+        elif change_pct > 5:
+            return "UP", "", change_pct, "#FFCC00"  # Yellow
+        elif change_pct < -30:
+            return "PLUNGE", "", change_pct, "#FF0000"  # Red - big drop
+        elif change_pct < -15:
+            return "FALLING", "", change_pct, "#FF9900"  # Orange
+        elif change_pct < -5:
+            return "DOWN", "", change_pct, "#FFCC00"  # Yellow
+        else:
+            return "STABLE", "", change_pct, "#88FF00"  # Stable-ish
+
 def get_trend_indicator(trend):
     """Return arrow character for trend."""
     if trend == "rising":
@@ -620,6 +716,7 @@ def render_station_frame(station, config, scale, is_wide):
     trend = "stable"
     trend_indicator = ""
     trend_color = "#888888"
+    timeseries = None
     
     if show_trend and value != None:
         param = station.get("parameter", "DISCHRG")
@@ -627,6 +724,15 @@ def render_station_frame(station, config, scale, is_wide):
         trend, change_pct = calculate_trend(timeseries)
         trend_indicator = get_trend_indicator(trend)
         trend_color = get_trend_color(trend)
+    
+    # Calculate flow stability for display
+    stability_label = "---"
+    stability_duration = ""
+    stability_pct = 0
+    stability_color = "#888888"
+    
+    if timeseries and len(timeseries) >= 4:
+        stability_label, stability_duration, stability_pct, stability_color = calculate_flow_stability(timeseries)
     
     # Get fishing condition indicator
     show_condition = config.bool("show_condition", True)
@@ -663,30 +769,12 @@ def render_station_frame(station, config, scale, is_wide):
     
     # Build frame based on display type
     if is_wide:
-        # Wide layout (128x64) - show more fishing-relevant info
+        # Wide layout (128x64) - show fishing-relevant info
         # Layout:
         # Row 1: River name (left) | Condition (right)
         # Row 2: CFS value + trend (large, center)
-        # Row 3: Water temp (left) | Ideal range (right)
-        # Row 4: Time (left) | % of ideal (right)
-        
-        # Format water temp display
-        temp_display = ""
-        temp_color = "#888888"
-        if temp_value != None:
-            temp_f = int(float(temp_value))
-            temp_display = "{}°F".format(temp_f)
-            # Color code temperature
-            if temp_f >= TEMP_THRESHOLDS["danger"]:
-                temp_color = "#FF0000"  # Red - danger
-            elif temp_f >= TEMP_THRESHOLDS["caution"]:
-                temp_color = "#FF6600"  # Orange - caution
-            elif temp_f >= TEMP_THRESHOLDS["prime_low"] and temp_f <= TEMP_THRESHOLDS["prime_high"]:
-                temp_color = "#00FF00"  # Green - prime
-            elif temp_f < TEMP_THRESHOLDS["cold"]:
-                temp_color = "#6699FF"  # Blue - cold
-            else:
-                temp_color = "#CCCCCC"  # Light gray - ok
+        # Row 3: Flow stability (left) | % of ideal (right)
+        # Row 4: Ideal range (centered)
         
         # Format ideal range display
         range_display = ""
@@ -755,18 +843,24 @@ def render_station_frame(station, config, scale, is_wide):
             ],
         )
         
-        # Row 3: Water temp (if available) + % of ideal
+        # Row 3: Flow stability + % of ideal
         pct_text = (pct_display + " ideal") if pct_display else ""
-        temp_text = "H2O: " + temp_display if temp_display else ""
+        
+        # Build stability display text
+        if stability_duration:
+            stability_text = "{} {}".format(stability_label, stability_duration)
+        else:
+            stability_text = stability_label
+        
         row3 = render.Row(
             expanded = True,
             main_align = "space_between",
             cross_align = "center",
             children = [
                 render.Text(
-                    content = temp_text,
+                    content = stability_text,
                     font = font_small,
-                    color = temp_color,
+                    color = stability_color,
                 ),
                 render.Text(
                     content = pct_text,
@@ -870,28 +964,29 @@ def render_multi_station(stations_data, config, scale, is_wide, delay):
     # Get display duration from config (in seconds, default 4)
     display_duration = int(config.get("display_duration", "4"))
     
-    # Use a fixed delay for multi-station animation
-    # Keep frame count reasonable - 40 frames per station at 100ms = 4 seconds
-    multi_delay = 100
-    frames_per_station = display_duration * 10  # 10 fps at 100ms delay
+    # Traditional Tidbyt animation: 50ms delay, duplicate frames for duration
+    # 50ms * 80 = 4 seconds per station
+    frame_delay = 50
+    frames_per_station = display_duration * 20  # 20 frames per second
     
-    # Cap to avoid hitting frame limits
-    if frames_per_station > 50:
-        frames_per_station = 50
+    # Cap frames per station to avoid memory issues
+    if frames_per_station > 100:
+        frames_per_station = 100
     
     for station in stations_data:
         if not station:
             continue
         
-        frame = render_station_frame(station, config, scale, is_wide)
+        # Create the frame once for this station
+        station_frame = render_station_frame(station, config, scale, is_wide)
         
-        # Add frame multiple times for configured display duration
-        for i in range(frames_per_station):
-            frames.append(frame)
+        # Duplicate for desired display duration
+        for repeat_idx in range(frames_per_station):
+            frames.append(station_frame)
     
     if len(frames) == 0:
         return render.Root(
-            delay = multi_delay,
+            delay = frame_delay,
             child = render.Box(
                 child = render.WrappedText(
                     content = "No stations configured",
@@ -900,8 +995,9 @@ def render_multi_station(stations_data, config, scale, is_wide, delay):
             ),
         )
     
+    # Always use Animation - even for single station it should work
     return render.Root(
-        delay = multi_delay,
+        delay = frame_delay,
         child = render.Animation(
             children = frames,
         ),
