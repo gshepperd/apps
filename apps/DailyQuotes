@@ -1,0 +1,181 @@
+"""
+Applet: Daily Quote
+Summary: Daily positive quote
+Description: Displays a rotating daily positive quote about nature, weather, animals, and life.
+Author: Greg
+Supports2x: true
+"""
+
+load("render.star", "render", "canvas")
+load("time.star", "time")
+load("encoding/hash.star", "hash")
+
+QUOTES = [
+    # Nature
+    ("In every walk with nature, one receives far more than he seeks.", "John Muir"),
+    ("The earth has music for those who listen.", "Shakespeare"),
+    ("Adopt the pace of nature: her secret is patience.", "Emerson"),
+    ("Nature does not hurry, yet everything is accomplished.", "Lao Tzu"),
+    ("The clearest way into the Universe is through a forest wilderness.", "John Muir"),
+    ("Look deep into nature, and you will understand everything better.", "Einstein"),
+    ("The mountains are calling and I must go.", "John Muir"),
+    ("In all things of nature there is something of the marvelous.", "Aristotle"),
+    ("Earth and sky, woods and fields, lakes and rivers—the simplest things.", "Thoreau"),
+    ("Nature always wears the colors of the spirit.", "Emerson"),
+    
+    # Weather & Seasons
+    ("After rain comes sunshine.", ""),
+    ("There is no such thing as bad weather, only different kinds of good weather.", "Ruskin"),
+    ("Sunshine is delicious, rain is refreshing, wind braces us.", "Ruskin"),
+    ("Live in the sunshine, swim the sea, drink the wild air.", "Emerson"),
+    ("A change in the weather is sufficient to recreate the world.", "Proust"),
+    ("The sun will rise and we will try again.", ""),
+    ("Every sunset brings the promise of a new dawn.", "Emerson"),
+    ("Storms make trees take deeper roots.", "Dolly Parton"),
+    ("The sky is an infinite movie to me.", "K'naan"),
+    ("Keep your face to the sunshine and shadows fall behind you.", "Whitman"),
+    
+    # Animals & Wildlife
+    ("Until one has loved an animal, a part of one's soul remains unawakened.", "Anatole France"),
+    ("The greatness of a nation can be judged by how it treats its animals.", "Gandhi"),
+    ("In the presence of animals, we find our best selves.", ""),
+    ("All creatures great and small, the good Lord made them all.", ""),
+    ("A bird does not sing because it has an answer—it sings because it has a song.", ""),
+    ("Even the smallest creature carries a sun in its eyes.", ""),
+    ("Watch a fish, a bird, a butterfly—and remember to be free.", ""),
+    ("Every animal knows more than you do.", "Native Proverb"),
+    
+    # Life & Wisdom
+    ("Every day is a fresh start.", ""),
+    ("Be present in all things and thankful for all things.", "Maya Angelou"),
+    ("The best time to plant a tree was 20 years ago. The second best time is now.", ""),
+    ("Life is what happens when you're busy making other plans.", "Lennon"),
+    ("Not all who wander are lost.", "Tolkien"),
+    ("Find joy in the ordinary.", ""),
+    ("Breathe deeply and appreciate the moment.", ""),
+    ("The river teaches us to flow with life.", ""),
+    ("Small moments make big memories.", ""),
+    ("Growth is a journey, not a destination.", ""),
+    ("Let the current carry your worries away.", ""),
+    ("Still waters run deep.", ""),
+    ("Be like water—flexible, persistent, powerful.", "Bruce Lee"),
+    ("Today is a good day to have a good day.", ""),
+    ("Bloom where you are planted.", ""),
+    
+    # Deeper Reflections
+    ("We are not separate from nature. We are nature becoming aware of itself.", "Eckhart Tolle"),
+    ("The wound is the place where the light enters you.", "Rumi"),
+    ("What you seek is seeking you.", "Rumi"),
+    ("The only way out is through.", "Robert Frost"),
+    ("Between stimulus and response there is a space. In that space is our power.", "Viktor Frankl"),
+    ("He who has a why to live can bear almost any how.", "Nietzsche"),
+    ("The oak sleeps in the acorn. The bird waits in the egg.", "Napoleon Hill"),
+    ("We do not see things as they are, we see them as we are.", "Anaïs Nin"),
+    ("The universe is not outside of you. Look inside yourself.", "Rumi"),
+    ("In the depth of winter, I found there was an invincible summer within me.", "Camus"),
+    ("You are the sky. Everything else is just the weather.", "Pema Chödrön"),
+    ("The present moment is filled with joy and happiness. If you are attentive, you will see it.", "Thich Nhat Hanh"),
+    ("When I let go of what I am, I become what I might be.", "Lao Tzu"),
+    ("The quieter you become, the more you can hear.", "Ram Dass"),
+    ("We are here to awaken from the illusion of separateness.", "Thich Nhat Hanh"),
+    ("Your task is not to seek for love, but to find all the barriers within yourself.", "Rumi"),
+    ("The privilege of a lifetime is to become who you truly are.", "Jung"),
+    ("No man ever steps in the same river twice, for it is not the same river.", "Heraclitus"),
+    ("Trees are poems that the earth writes upon the sky.", "Kahlil Gibran"),
+    ("Perhaps all the dragons in our lives are princesses waiting to see us act with beauty.", "Rilke"),
+    ("The soul always knows what to do to heal itself. The challenge is to silence the mind.", "Caroline Myss"),
+    ("At the center of your being you have the answer.", "Lao Tzu"),
+    ("One does not become enlightened by imagining figures of light, but by making the darkness conscious.", "Jung"),
+    ("The real voyage of discovery consists not in seeking new landscapes, but in having new eyes.", "Proust"),
+    ("Out beyond ideas of wrongdoing and rightdoing, there is a field. I will meet you there.", "Rumi"),
+    ("Ring the bells that still can ring. Forget your perfect offering. There is a crack in everything.", "Leonard Cohen"),
+    ("We are not human beings having a spiritual experience. We are spiritual beings having a human experience.", "Teilhard de Chardin"),
+    ("What lies behind us and what lies before us are tiny matters compared to what lies within us.", "Emerson"),
+    ("The cave you fear to enter holds the treasure you seek.", "Joseph Campbell"),
+    ("Before you know kindness as the deepest thing inside, you must know sorrow.", "Naomi Shihab Nye"),
+]
+
+# Colors
+BG_COLOR = "#0a1628"
+QUOTE_COLOR = "#87CEEB"
+AUTHOR_COLOR = "#6B8E23"
+DIVIDER_COLOR = "#334455"
+
+def main(config):
+    # Get display dimensions and scale
+    width = canvas.width()
+    height = canvas.height()
+    scale = 2 if canvas.is2x() else 1
+    
+    # Adjust animation delay for scale
+    delay = 35 if scale == 2 else 75
+    
+    # Font selection based on scale
+    quote_font = "6x13" if scale == 2 else "tb-8"
+    author_font = "tom-thumb" if scale == 1 else "5x8"
+    
+    # Get current date to select quote (changes daily)
+    now = time.now()
+    day_of_year = now.day + (now.month * 31)  # Simple day calculation
+    quote_index = day_of_year % len(QUOTES)
+    
+    quote_text, author = QUOTES[quote_index]
+    
+    # Format author if present
+    author_display = ""
+    if author:
+        author_display = "— " + author
+    
+    return render.Root(
+        delay = delay,
+        child = render.Box(
+            width = width,
+            height = height,
+            color = BG_COLOR,
+            child = render.Column(
+                expanded = True,
+                main_align = "space_between",
+                children = [
+                    # Quote text (scrolling)
+                    render.Marquee(
+                        width = width,
+                        child = render.Text(
+                            content = quote_text,
+                            font = quote_font,
+                            color = QUOTE_COLOR,
+                        ),
+                        offset_start = width,
+                        offset_end = width,
+                    ),
+                    # Divider
+                    render.Box(
+                        width = width,
+                        height = 1 * scale,
+                        color = DIVIDER_COLOR,
+                    ),
+                    # Author (if present) or decorative element
+                    render.Row(
+                        expanded = True,
+                        main_align = "center",
+                        children = [
+                            render.Marquee(
+                                width = width,
+                                child = render.Text(
+                                    content = author_display if author else "✦ daily wisdom ✦",
+                                    font = author_font,
+                                    color = AUTHOR_COLOR,
+                                ),
+                            ) if len(author_display) > 12 else render.Text(
+                                content = author_display if author else "✦ daily wisdom ✦",
+                                font = author_font,
+                                color = AUTHOR_COLOR,
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ),
+    )
+
+def get_schema():
+    return []
