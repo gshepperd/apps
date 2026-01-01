@@ -352,7 +352,11 @@ def calculate_trend(timeseries):
     
     # Compare most recent to average of previous
     current = values[0]
-    previous_avg = sum(values[1:]) / len(values[1:])
+    previous_values = values[1:]
+    total = 0.0
+    for v in previous_values:
+        total = total + v
+    previous_avg = total / len(previous_values)
     
     change_pct = ((current - previous_avg) / previous_avg * 100) if previous_avg != 0 else 0
     
@@ -856,12 +860,20 @@ def main(config):
 def get_schema():
     """Return the configuration schema for the app."""
     station_options = [
-        schema.Option(display = v["name"], value = k)
-        for k, v in RIVER_STATIONS.items()
-    ]
+    # Build station options sorted by display name
+    # First create list of (display_name, key) tuples, sort, then create options
+    station_list = []
+    for k, v in RIVER_STATIONS.items():
+        station_list.append((v["name"], k))
     
-    # Sort by display name
-    station_options = sorted(station_options, key = lambda x: x.display)
+    # Sort by display name (first element of tuple)
+    station_list = sorted(station_list)
+    
+    # Create schema options from sorted list
+    station_options = [
+        schema.Option(display = name, value = key)
+        for name, key in station_list
+    ]
     
     # Add "None" option for additional stations
     station_options_with_none = [schema.Option(display = "None", value = "")] + station_options
