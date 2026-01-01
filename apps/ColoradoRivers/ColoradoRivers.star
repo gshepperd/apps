@@ -429,27 +429,6 @@ def get_fishing_condition(abbrev, cfs_value, temp_value = None):
     else:
         return "high", "BLOWN", "#FF0000"
 
-def format_decimal(val, decimals):
-    """Format a float with specified decimal places (Starlark compatible)."""
-    if decimals == 0:
-        return str(int(val))
-    
-    # Multiply by 10^decimals, round, then format
-    multiplier = 1
-    for _ in range(decimals):
-        multiplier = multiplier * 10
-    
-    rounded = int(val * multiplier + 0.5)
-    integer_part = rounded // multiplier
-    decimal_part = rounded % multiplier
-    
-    # Pad decimal part with leading zeros if needed
-    decimal_str = str(decimal_part)
-    while len(decimal_str) < decimals:
-        decimal_str = "0" + decimal_str
-    
-    return "{}.{}".format(integer_part, decimal_str)
-
 def format_value(value, units):
     """Format display value with appropriate precision."""
     if value == None:
@@ -463,15 +442,15 @@ def format_value(value, units):
         elif val >= 100:
             return str(int(val))
         elif val >= 10:
-            return format_decimal(val, 1)
+            return "{:.1f}".format(val)
         else:
-            return format_decimal(val, 2)
+            return "{:.2f}".format(val)
     elif units in ["ft", "FT"]:
-        return format_decimal(val, 2)
+        return "{:.2f}".format(val)
     elif units in ["F", "°F"]:
         return str(int(val))
     else:
-        return str(int(val)) if val == int(val) else format_decimal(val, 1)
+        return str(int(val)) if val == int(val) else "{:.1f}".format(val)
 
 def format_time(time_str):
     """Format measurement time for display."""
@@ -808,17 +787,14 @@ def render_multi_station(stations_data, config, scale, is_wide, delay):
     # Get display duration from config (in seconds, default 4)
     display_duration = int(config.get("display_duration", "4"))
     
-    # For multi-station mode, use slower frame rate to stay within limits
-    # Tronbyt typically limits to ~300-500 frames total
-    # Use 100ms delay (10fps) for multi-station to allow more stations
+    # Use a fixed delay for multi-station animation
+    # Keep frame count reasonable - 40 frames per station at 100ms = 4 seconds
     multi_delay = 100
-    frames_per_second = 1000 // multi_delay
-    frame_count = display_duration * frames_per_second
+    frames_per_station = display_duration * 10  # 10 fps at 100ms delay
     
-    # Cap frame count per station to avoid exceeding limits
-    # With 10 stations at 40 frames each = 400 frames total (safe)
-    max_frames_per_station = 40
-    frame_count = min(frame_count, max_frames_per_station)
+    # Cap to avoid hitting frame limits
+    if frames_per_station > 50:
+        frames_per_station = 50
     
     for station in stations_data:
         if not station:
@@ -827,14 +803,17 @@ def render_multi_station(stations_data, config, scale, is_wide, delay):
         frame = render_station_frame(station, config, scale, is_wide)
         
         # Add frame multiple times for configured display duration
-        for _ in range(frame_count):
+        for i in range(frames_per_station):
             frames.append(frame)
     
-    if not frames:
+    if len(frames) == 0:
         return render.Root(
             delay = multi_delay,
             child = render.Box(
-                child = render.WrappedText("No stations configured", color = "#FF0000"),
+                child = render.WrappedText(
+                    content = "No stations configured",
+                    color = "#FF0000",
+                ),
             ),
         )
     
@@ -873,7 +852,7 @@ def main(config):
             stations.append(station_abbrev)
     
     # Default to PLACHECO if nothing configured
-    if not stations:
+    if len(stations) == 0:
         stations = ["PLACHECO"]
     
     if display_mode == "single":
@@ -882,7 +861,9 @@ def main(config):
         return render_single_station(station_data, config, scale, is_wide, delay)
     else:
         # Multi station mode - cycle through all configured stations
-        stations_data = [get_station_data(s) for s in stations]
+        stations_data = []
+        for s in stations:
+            stations_data.append(get_station_data(s))
         return render_multi_station(stations_data, config, scale, is_wide, delay)
 
 def get_schema():
@@ -890,7 +871,8 @@ def get_schema():
     # Build station options sorted by display name
     # First create list of (display_name, key) tuples, sort, then create options
     station_list = []
-    for k, v in RIVER_STATIONS.items():
+    for k in RIVER_STATIONS.keys():
+        v = RIVER_STATIONS[k]
         station_list.append((v["name"], k))
     
     # Sort by display name (first element of tuple)
