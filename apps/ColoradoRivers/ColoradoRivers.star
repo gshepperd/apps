@@ -293,7 +293,8 @@ def get_station_data(abbrev):
         return None
     
     # Check if this is a USGS-only station first
-    if abbrev in USGS_FLOW_STATIONS:
+    usgs_info = USGS_FLOW_STATIONS.get(abbrev)
+    if usgs_info:
         return get_usgs_flow_data(abbrev)
         
     cache_key = "co_rivers_{}".format(abbrev)
@@ -350,7 +351,7 @@ def get_usgs_flow_data(abbrev):
         return json.decode(cached)
     
     # USGS API for instantaneous values, parameter 00060 = discharge (CFS)
-    url = "{}?sites={}&parameterCd=00060&format=json".format(USGS_API_BASE, site_number)
+    url = "{}?sites={}&parameterCd=00060&format=json&siteStatus=all".format(USGS_API_BASE, site_number)
     
     resp = http.get(url, ttl_seconds = CACHE_TTL)
     if resp.status_code != 200:
@@ -371,14 +372,20 @@ def get_usgs_flow_data(abbrev):
     if not value_list or len(value_list) == 0:
         return None
     
-    # Get the most recent value
-    latest = value_list[0]
-    cfs_value = float(latest.get("value", 0))
+    # Get the most recent value (USGS returns oldest first, so get last)
+    latest = value_list[len(value_list) - 1]
+    
+    # Check for valid value (USGS uses -999999 for no data)
+    raw_value = latest.get("value", "")
+    if not raw_value or raw_value == "" or raw_value == "-999999":
+        return None
+    
+    cfs_value = float(raw_value)
     
     result = {
         "abbrev": abbrev,
         "name": usgs_info.get("name", "Unknown"),
-        "water_source": "Bear Creek",
+        "water_source": usgs_info.get("name", ""),
         "parameter": "DISCHRG",
         "value": cfs_value,
         "units": "CFS",
@@ -411,8 +418,8 @@ def get_usgs_timeseries(abbrev):
         return json.decode(cached)
     
     # Get last 24 hours of data for stability analysis
-    # USGS returns most recent first
-    url = "{}?sites={}&parameterCd=00060&format=json&period=P1D".format(USGS_API_BASE, site_number)
+    # USGS returns oldest first by default
+    url = "{}?sites={}&parameterCd=00060&format=json&period=P1D&siteStatus=all".format(USGS_API_BASE, site_number)
     
     resp = http.get(url, ttl_seconds = CACHE_TTL)
     if resp.status_code != 200:
@@ -433,8 +440,12 @@ def get_usgs_timeseries(abbrev):
     # Convert USGS format to match DWR format for compatibility
     results = []
     for v in value_list:
+        raw_val = v.get("value", "")
+        # Skip invalid values
+        if not raw_val or raw_val == "" or raw_val == "-999999":
+            continue
         results.append({
-            "measValue": float(v.get("value", 0)),
+            "measValue": float(raw_val),
             "measDateTime": v.get("dateTime", ""),
         })
     
@@ -450,7 +461,8 @@ def get_station_timeseries(abbrev, parameter):
         return []
     
     # Check if this is a USGS-only station
-    if abbrev in USGS_FLOW_STATIONS:
+    usgs_info = USGS_FLOW_STATIONS.get(abbrev)
+    if usgs_info:
         return get_usgs_timeseries(abbrev)
         
     cache_key = "co_rivers_ts_{}_{}".format(abbrev, parameter)
