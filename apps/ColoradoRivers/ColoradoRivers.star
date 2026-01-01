@@ -620,7 +620,7 @@ def render_station_frame(station, config, scale, is_wide):
         font_med = "6x13"
         font_small = "6x10"
         
-        # Row 1: River name + condition
+        # Row 1: River name + condition (no Box wrapper)
         row1 = render.Row(
             expanded = True,
             main_align = "space_between",
@@ -631,16 +631,10 @@ def render_station_frame(station, config, scale, is_wide):
                     font = font_med,
                     color = "#FFFFFF",
                 ),
-                render.Box(
-                    color = condition_color if condition_text else "#333333",
-                    child = render.Padding(
-                        pad = (2, 1, 2, 1),
-                        child = render.Text(
-                            content = condition_text if condition_text else "---",
-                            font = font_small,
-                            color = "#000000" if condition_text else "#666666",
-                        ),
-                    ),
+                render.Text(
+                    content = condition_text if condition_text else "---",
+                    font = font_med,
+                    color = condition_color,
                 ),
             ],
         )
