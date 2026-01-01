@@ -618,12 +618,9 @@ def render_station_frame(station, config, scale, is_wide):
         return render.Box(
             width = canvas.width(),
             height = canvas.height(),
-            padding = 2,
             child = render.Column(
-                expanded = True,
-                main_align = "space_between",
                 children = [
-                    # Row 1: River name (left) | Condition badge (right)
+                    # Row 1: River name (left) | Condition badge (right) - 14px
                     render.Row(
                         main_align = "space_between",
                         expanded = True,
@@ -650,7 +647,9 @@ def render_station_frame(station, config, scale, is_wide):
                             ),
                         ],
                     ),
-                    # Row 2: Main CFS value with trend (large, centered)
+                    # Spacer
+                    render.Box(height = 2),
+                    # Row 2: Main CFS value with trend (large, centered) - 20px
                     render.Row(
                         main_align = "center",
                         cross_align = "center",
@@ -661,7 +660,7 @@ def render_station_frame(station, config, scale, is_wide):
                                 font = "Dina_r400-6",
                                 color = data_color,
                             ),
-                            render.Box(width = 6, height = 1),
+                            render.Box(width = 4, height = 1),
                             render.Text(
                                 content = trend_indicator if show_trend else "",
                                 font = "Dina_r400-6",
@@ -669,7 +668,9 @@ def render_station_frame(station, config, scale, is_wide):
                             ),
                         ],
                     ),
-                    # Row 3: Water temp (left) | Ideal range (right)
+                    # Spacer
+                    render.Box(height = 2),
+                    # Row 3: Water temp (left) | Ideal range (right) - 8px
                     render.Row(
                         main_align = "space_between",
                         expanded = True,
@@ -704,7 +705,9 @@ def render_station_frame(station, config, scale, is_wide):
                             ),
                         ],
                     ),
-                    # Row 4: Time (left) | % of ideal (right)
+                    # Spacer
+                    render.Box(height = 2),
+                    # Row 4: Time (left) | % of ideal (right) - 8px
                     render.Row(
                         main_align = "space_between",
                         expanded = True,
@@ -848,20 +851,23 @@ def render_multi_station(stations_data, config, scale, is_wide, delay):
 def main(config):
     """Main entry point for the app."""
     
-    # Detect display dimensions and scale
+    # Detect display dimensions
     is_2x = canvas.is2x()
     scale = 2 if is_2x else 1
     width = canvas.width()
+    height = canvas.height()
     
-    # Detect wide display with enough height for 4-row layout
+    # Debug: uncomment to see what dimensions we're getting
+    # print("Canvas: {}x{}, is_2x={}".format(width, height, is_2x))
+    
+    # Detect if we have enough height for 4-row layout
     # 128x64 (2x mode) = wide and tall, use 4-row layout
-    # 128x32 (S3 Wide) = wide but short, use standard layout with wider marquee
+    # 128x32 (S3 Wide) = wide but short, use standard layout
     # 64x32 (standard) = use standard layout
-    # Only use wide 4-row layout if we're in 2x mode (which gives us 64px height)
-    is_wide = is_2x and width > 64
+    # Only use 4-row layout if height > 32 (need room for 4 rows)
+    is_wide = height > 32 and width > 64
     
     # Adjust animation delay for consistent perceived speed
-    # Marquee moves 1px per frame, so faster delay on 2x keeps same speed
     delay = 25 if is_2x else 50
     
     display_mode = config.get("display_mode", "single")
